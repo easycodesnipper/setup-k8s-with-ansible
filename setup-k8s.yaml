@@ -1,0 +1,39 @@
+
+
+- hosts: cluster_hosts
+  any_errors_fatal: true
+  gather_facts: yes
+  tasks:
+    - include_role:
+        name: precheck
+
+    - include_role:
+        name: docker
+
+    - include_role:
+        name: containerd
+        tasks_from: config
+
+    - include_role:
+        name: k8s
+        tasks_from: reset
+      when: k8s_reset | default('true')
+
+    - include_role:
+        name: k8s
+
+- hosts: controller_hosts
+  any_errors_fatal: true
+  gather_facts: yes
+  tasks:
+    - include_role:
+        name: k8s
+        tasks_from: kubeadm-init
+
+- hosts: worker_hosts
+  any_errors_fatal: true
+  gather_facts: yes
+  tasks:
+    - include_role:
+        name: k8s
+        tasks_from: kubeadm-join

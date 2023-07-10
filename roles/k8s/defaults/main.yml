@@ -1,0 +1,29 @@
+
+k8s_dep_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+
+#k8s_gpg_keyring: "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+k8s_gpg_keyring: "https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg"
+
+# k8s_apt_repo: "https://apt.kubernetes.io/"
+k8s_apt_repo: "https://mirrors.aliyun.com/kubernetes/apt/"
+
+k8s_version: "1.27.3"
+
+k8s_install_packages:
+  - kubelet
+  - kubeadm
+  - kubectl
+
+k8s_kubeadm_conf: "kubeadm.conf"
+# k8s_image_repository: "registry.k8s.io"
+k8s_image_repository: "registry.aliyuncs.com/google_containers"
+
+k8s_pod_subnet: "10.244.0.0/16"
+
+k8s_cni: "flannel"
+
+k8s_cni_flannel_version: "v0.22.0"
+k8s_cni_flannel_repo: "https://raw.githubusercontent.com/flannel-io/flannel/{{ k8s_cni_flannel_version }}/Documentation/kube-flannel.yml"

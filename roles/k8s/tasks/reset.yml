@@ -1,0 +1,42 @@
+
+- include_role:
+    name: common
+    tasks_from: stop_service
+  vars:
+    service_name: "{{ item }}"
+  loop:
+    - kubelet
+    - docker
+
+- name: Reset Kubernetes
+  command: kubeadm reset -f
+  become: true
+  ignore_errors: yes
+
+- name: Remove CNI configuration
+  file:
+    path: /etc/cni/net.d
+    state: absent
+  become: true
+  ignore_errors: yes
+
+- name: Reset IPVS tables
+  command: ipvsadm --clear
+  become: true
+  ignore_errors: yes
+
+- name: Remove kubeconfig files
+  file:
+    path: "{{ ansible_user_dir }}/.kube"
+    state: absent
+  become: true
+  ignore_errors: yes
+
+- include_role:
+    name: common
+    tasks_from: restart_service
+  vars:
+    service_name: "{{ item }}"
+  loop:
+    - docker
+    - kubelet

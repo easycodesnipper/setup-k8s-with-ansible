@@ -1,0 +1,18 @@
+---
+
+- name: Debug OS information
+  debug:
+    msg: "OS Family: {{ ansible_os_family }}, Distribution: {{ ansible_distribution }}"
+
+- name: Check if hostname matches RFC 1178
+  fail:
+    msg: "The hostname {{ ansible_hostname }} does not match RFC 1178."
+  when: ansible_hostname is not match('^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)?$')
+
+- name: Check apt/yum update available
+  become: true
+  action: "{{ (ansible_os_family == 'Debian') | ternary('apt', 'yum') }} update_cache=true"
+  register: apt_update_rc
+  until: apt_update_rc is success
+  retries: 3
+  delay: 15

@@ -1,0 +1,74 @@
+
+- name: Initialize default kubeadm.conf
+  shell: |
+    kubeadm config print init-defaults > {{ k8s_kubeadm_conf }}
+  args:
+    executable: /bin/bash
+
+- name: Customize kubeadm.conf `name` with hostname
+  lineinfile:
+    path: "{{ k8s_kubeadm_conf }}"
+    regexp: '^\s*name:\s*.*'
+    line: "  name: {{ hostvars[inventory_hostname]['ansible_hostname'] }}"
+
+- name: Customize kubeadm.conf `advertiseAddress` with ip
+  lineinfile:
+    path: "{{ k8s_kubeadm_conf }}"
+    regexp: '^\s*advertiseAddress:\s*.*'
+    line: "  advertiseAddress: {{ hostvars[inventory_hostname]['ansible_host'] }}"
+
+- name: Customize kubeadm.conf `imageRepository` with mirror repository
+  lineinfile:
+    path: "{{ k8s_kubeadm_conf }}"
+    regexp: '^\s*imageRepository:\s*.*'
+    line: 'imageRepository: {{ k8s_image_repository }}'
+
+- name: Customize kubeadm.conf `podSubnet` with specified
+  blockinfile:
+    path: "{{ k8s_kubeadm_conf }}"
+    insertbefore: '^\s*serviceSubnet:\s*.*'
+    block: |
+      {{'  '}}podSubnet: {{ k8s_pod_subnet }}
+
+- name: Kubeadm init with customized kubeadm.conf
+  shell: |
+    kubeadm init --config={{ k8s_kubeadm_conf }}
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Create user's kube directory
+  file:
+    path: "{{ ansible_user_dir }}/.kube"
+    state: directory
+    mode: "0755"
+
+- name: Copy admin.conf to user's kubeconfig directory
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ ansible_user_dir }}/.kube/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+    remote_src: yes
+  become: true
+
+- name: Set correct ownership for kubeconfig
+  file:
+    path: "{{ ansible_user_dir }}/.kube/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+  become: true
+
+- include_tasks:
+    file: "cni-{{ k8s_cni }}.yml"
+
+- include_role:
+    name: common
+    tasks_from: restart_service
+  vars:
+    service_name: "{{ item }}"
+  loop:
+    - containerd
+    - kubelet

@@ -1,0 +1,9 @@
+- name: Install CNI flannel
+  shell: |
+    kubectl create -f {{ k8s_cni_flannel_repo }} --v=0
+  args:
+    executable: /bin/bash
+  register: install_flannel_rc
+  until: install_flannel_rc is success
+  retries: 3
+  delay: 15

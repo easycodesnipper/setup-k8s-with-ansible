@@ -1,0 +1,95 @@
+- name: Check if docker installed
+  shell: |
+    docker --version | awk '{print $3}' | cut -d ',' -f 1
+  args:
+    executable: /bin/bash
+  register: installed_docker_version_rc
+  ignore_errors: true
+  become: true
+
+- name: Set fact for docker_version_matches
+  set_fact:
+    docker_version_matches: "{{ installed_docker_version_rc.stdout is version(docker_version, '>=' ) }}"
+  when: installed_docker_version_rc.rc == 0
+
+- block:
+  - name: Uninstall {{ item }} package
+    package:
+      name: "{{ item }}"
+      state: absent
+    loop: "{{ docker_uninstall_pkgs }}"
+    become: true
+
+  - name: Download docker install script
+    get_url:
+      url: "https://get.docker.com"
+      dest: "/tmp/install-docker.sh"
+      mode: '0755'
+
+  - name: Install docker
+    shell: |
+      "/tmp/install-docker.sh --mirror {{ docker_mirror }} --version {{ docker_version }}"
+    args:
+      executable: /bin/bash
+    become: true
+
+  - name: Add user to docker group
+    user:
+      name: "{{ ansible_user }}"
+      groups: [ docker ]
+      append: yes
+    become: true
+
+  - include_role:
+      name: common
+      tasks_from: reset_connection
+  when: docker_reset or (installed_docker_version_rc.rc != 0) or (not docker_version_matches | default('true'))
+
+- name: Check if {{ docker_daemon_json }} exists
+  stat:
+    path: "{{ docker_daemon_json }}"
+  register: docker_daemon_rc
+
+- block:
+  - name: Ensure {{ docker_data_root }} directory exists
+    file:
+      path: "{{ docker_data_root }}"
+      state: directory
+    become: true
+
+  - name: Ensure {{ docker_daemon_json | dirname }} directory exists
+    file:
+      path: "{{ docker_daemon_json | dirname }}"
+      state: directory
+    become: true
+
+  - name: Ensure {{ docker_daemon_json }} file exists
+    file:
+      path: "{{ docker_daemon_json }}"
+      state: touch
+    become: true
+  when: not docker_daemon_rc.stat.exists
+
+- name: Set fact for docker daemon config
+  set_fact:
+    docker_daemon_cfg:
+      "data-root": "{{ docker_data_root }}"
+      "registry-mirrors": "{{ docker_registry_mirrors }}"
+      "exec-opts": ["native.cgroupdriver=systemd"]
+
+- name: Read existing file content of {{ docker_daemon_json }}
+  slurp:
+    src: "{{ docker_daemon_json }}"
+  register: existing_daemon_json
+
+- name: Merge file content of {{ docker_daemon_json }}
+  copy:
+    content: "{{ existing_daemon_json['content'] | b64decode | default('{}', true) | from_json | combine(docker_daemon_cfg, recursive=True, list_merge='append') | to_nice_json }}"
+    dest: "{{ docker_daemon_json }}"
+  become: true
+
+- include_role:
+    name: common
+    tasks_from: restart_service
+  vars:
+    service_name: "docker"

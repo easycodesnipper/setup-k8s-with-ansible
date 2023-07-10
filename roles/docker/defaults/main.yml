@@ -1,0 +1,15 @@
+
+docker_uninstall_pkgs:
+  - docker.io
+  - docker-doc
+  - docker-compose
+  - podman-docker
+  - containerd runc
+
+docker_version: "24.0.4"
+docker_mirror: "Aliyun"
+docker_reset: false
+docker_daemon_json: "/etc/docker/daemon.json"
+docker_data_root: "/var/lib/docker"
+docker_registry_mirrors: []
+

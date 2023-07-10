@@ -1,0 +1,28 @@
+
+- name: Print join command
+  shell: kubeadm token create --print-join-command
+  args:
+    executable: /bin/bash
+  register: print_join_cmd
+  delegate_to: 'controller'
+  become: true
+
+- name: Kubeadm join worker
+  shell: |
+    {{ print_join_cmd.stdout_lines[0] }}
+  args:
+    executable: /bin/bash
+  register: kubeadm_join_cmd
+  until: kubeadm_join_cmd is success
+  retries: 3
+  delay: 15
+  become: true
+
+- include_role:
+    name: common
+    tasks_from: restart_service
+  vars:
+    service_name: "{{ item }}"
+  loop:
+    - containerd
+    - kubelet

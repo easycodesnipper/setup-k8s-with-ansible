@@ -1,0 +1,42 @@
+- name: Check if {{ containerd_cfg_file }} exists
+  stat:
+    path: "{{ containerd_cfg_file }}"
+  register: containerd_cfg_file_rc
+
+- name: Ensure {{ containerd_cfg_file | dirname }} directory exists
+  file:
+    path: "{{ containerd_cfg_file | dirname  }}"
+    state: directory
+  become: true
+  when: not containerd_cfg_file_rc.stat.exists
+
+- name: Generate default config file {{ containerd_cfg_file }}
+  shell: |
+    containerd config default | tee {{ containerd_cfg_file }} > /dev/null
+  args:
+    executable: /bin/bash
+  become: true
+
+- name: Replace SystemdCgroup = true in {{ containerd_cfg_file }}
+  lineinfile:
+    path: "{{ containerd_cfg_file }}"
+    regexp: '^(\s*)SystemdCgroup\s*=\s*false$'
+    line: '\g<1>SystemdCgroup = true'
+    backrefs: yes
+  become: true
+
+- name: Replace sandbox_image with mirror value in {{ containerd_cfg_file }}
+  lineinfile:
+    path: "{{ containerd_cfg_file }}"
+    regexp: '^(\s*)sandbox_image\s*=\s*".*"'
+    line: '\g<1>sandbox_image = "{{ containerd_sandbox_image_mirror }}"'
+    backrefs: yes
+  become: true
+
+- include_role:
+    name: common
+    tasks_from: restart_service
+  vars:
+    service_name: "{{ item }}"
+  loop:
+    - containerd

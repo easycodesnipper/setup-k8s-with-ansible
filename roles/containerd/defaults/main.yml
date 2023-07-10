@@ -1,0 +1,2 @@
+containerd_cfg_file: "/etc/containerd/config.toml"
+containerd_sandbox_image_mirror: "registry.aliyuncs.com/google_containers/pause:3.9"
