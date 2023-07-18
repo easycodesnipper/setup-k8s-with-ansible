@@ -68,6 +68,13 @@
     group: "{{ ansible_user }}"
     mode: "0600"
 
+- include_role:
+    name: common
+    tasks_from: restart_service
+  vars:
+    service_name: "systemd-resolved"
+  when: os_family == "rhel fedora"
+
 - include_tasks:
     file: "cni-{{ k8s_cni }}.yml"
 
