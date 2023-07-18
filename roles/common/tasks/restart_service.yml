@@ -1,12 +1,13 @@
 
 - name: Restart {{ service_name }} service
+  become: true
   systemd:
     name: "{{ service_name }}"
     state: restarted
     enabled: yes
     daemon_reload: yes
-  register: service_rc
-  until: service_rc is success
+  register: service_rs
+  until: service_rs is success
   delay: 15
   retries: 3
-  become: true
+  

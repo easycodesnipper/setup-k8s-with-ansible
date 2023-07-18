@@ -1,74 +1,100 @@
-- name: Check if docker installed
+- name: Check if Docker is installed
+  command: which docker
+  register: docker_installed_rs
+  ignore_errors: yes
+
+- name: Get docker version
   shell: |
     docker --version | awk '{print $3}' | cut -d ',' -f 1
   args:
     executable: /bin/bash
-  register: installed_docker_version_rc
-  ignore_errors: true
-  become: true
+  register: docker_version_rs
+  ignore_errors: yes
+  when: docker_installed_rs.rc == 0
 
 - name: Set fact for docker_version_matches
   set_fact:
-    docker_version_matches: "{{ installed_docker_version_rc.stdout is version(docker_version, '>=' ) }}"
-  when: installed_docker_version_rc.rc == 0
+    docker_version_matches: "{{ (docker_installed_rs.rc == 0) and ( docker_version_rs.stdout_lines | length == 1 ) and ( docker_version_rs.stdout is version(docker_version, '>=') ) }}"
 
 - block:
-  - name: Uninstall {{ item }} package
+  - include_role:
+      name: common
+      tasks_from: stop_service
+    vars:
+      service_name: "{{ docker }}"
+    when: docker_installed_rs.rc == 0
+
+  - name: Uninstall Docker
     package:
       name: "{{ item }}"
       state: absent
-    loop: "{{ docker_uninstall_pkgs }}"
-    become: true
+    loop: "{{ docker_packages }}"
+    when: docker_installed_rs.rc == 0
+
+  - name: Uninstall Docker conflict packages
+    package:
+      name: "{{ item }}"
+      state: absent
+    loop: "{{ docker_conflict_packages }}"
+    ignore_errors: yes
+    when: os_family == "rhel fedora"
 
   - name: Download docker install script
     get_url:
       url: "https://get.docker.com"
       dest: "/tmp/install-docker.sh"
       mode: '0755'
+    register: download_docker_install_script_rs
+    until: download_docker_install_script_rs is success
+    retries: 3
+    delay: 15
 
-  - name: Install docker
+  - name: Install docker with downloaded install script
     shell: |
-      "/tmp/install-docker.sh --mirror {{ docker_mirror }} --version {{ docker_version }}"
+      /tmp/install-docker.sh \
+      {% if docker_install_use_mirror and docker_install_mirror is defined %}
+        --mirror "{{ docker_install_mirror }}" \
+      {% endif %}
+      --version "{{ docker_version }}"
     args:
       executable: /bin/bash
-    become: true
+    register: docker_install_rs
+    until: docker_install_rs is success
+    retries: 3
+    delay: 15
 
-  - name: Add user to docker group
+  - name: Add user {{ ansible_user }} to docker group
     user:
       name: "{{ ansible_user }}"
       groups: [ docker ]
       append: yes
-    become: true
 
   - include_role:
       name: common
       tasks_from: reset_connection
-  when: docker_reset or (installed_docker_version_rc.rc != 0) or (not docker_version_matches | default('true'))
+  when: docker_reset or ( not docker_version_matches )
 
 - name: Check if {{ docker_daemon_json }} exists
   stat:
     path: "{{ docker_daemon_json }}"
-  register: docker_daemon_rc
+  register: docker_daemon_rs
 
 - block:
   - name: Ensure {{ docker_data_root }} directory exists
     file:
       path: "{{ docker_data_root }}"
       state: directory
-    become: true
 
   - name: Ensure {{ docker_daemon_json | dirname }} directory exists
     file:
       path: "{{ docker_daemon_json | dirname }}"
       state: directory
-    become: true
 
   - name: Ensure {{ docker_daemon_json }} file exists
     file:
       path: "{{ docker_daemon_json }}"
       state: touch
-    become: true
-  when: not docker_daemon_rc.stat.exists
+  when: not docker_daemon_rs.stat.exists
 
 - name: Set fact for docker daemon config
   set_fact:
@@ -86,7 +112,13 @@
   copy:
     content: "{{ existing_daemon_json['content'] | b64decode | default('{}', true) | from_json | combine(docker_daemon_cfg, recursive=True, list_merge='append') | to_nice_json }}"
     dest: "{{ docker_daemon_json }}"
-  become: true
+
+- include_role:
+    name: common
+    tasks_from: proxy_service
+  vars:
+    service_name: "docker"
+  when: use_proxy
 
 - include_role:
     name: common

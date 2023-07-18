@@ -1,18 +1,79 @@
----
+- name: Get variables ending with "_mirror"
+  set_fact:
+    mirror_vars: "{{ hostvars[inventory_hostname] | dict2items | selectattr('key', 'match', '.*_mirror$') | map(attribute='value') | list }}"
 
-- name: Debug OS information
+- name: Gather facts only for package_facts
+  setup:
+    gather_subset: ['!all', '!facter']  # Exclude all subsets except 'facter'
+
+- name: Debug Extra Variables
   debug:
-    msg: "OS Family: {{ ansible_os_family }}, Distribution: {{ ansible_distribution }}"
+    msg: |
+      {{ hostvars[inventory_hostname] }}
+      ----------------------------------
+      {{ groups['cluster_hosts'] | map('extract', hostvars, 'ansible_host') | join(',') }}
+      ----------------------------------
+      {{ mirror_vars }}
+      ----------------------------------
+      {{ ansible_pkg_mgr }}
+
+- name: Read os family from /etc/os-release
+  shell: |
+    . /etc/os-release; echo $ID_LIKE
+  args:
+    executable: /bin/bash
+  register: os_family_rs
+  changed_when: false
+
+- name: Get hostname
+  shell: |
+    hostname -s
+  args:
+    executable: /bin/bash
+  register: hostname_rs
+  changed_when: false
+
+- name: Set facts
+  set_fact:
+    os_family: "{{ os_family_rs.stdout }}"
+    hostname: "{{ hostname_rs.stdout }}"
 
 - name: Check if hostname matches RFC 1178
   fail:
-    msg: "The hostname {{ ansible_hostname }} does not match RFC 1178."
-  when: ansible_hostname is not match('^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)?$')
+    msg: "The hostname {{ hostname_rs }} does not match RFC 1178."
+  when: hostname is not match(rfc1178_regex)
 
-- name: Check apt/yum update available
-  become: true
-  action: "{{ (ansible_os_family == 'Debian') | ternary('apt', 'yum') }} update_cache=true"
-  register: apt_update_rc
-  until: apt_update_rc is success
+- name: Update package cache
+  command: "{{ 'apt update -y' if ansible_facts.pkg_mgr == 'apt' else 'yum updateinfo -y' }}"
+  register: apt_update_rs
+  until: apt_update_rs is success
   retries: 3
   delay: 15
+
+- block:
+  - name: Check SELinux status
+    shell: getenforce
+    register: selinux_rs
+
+  - block:
+    - name: Update SELinux configuration file
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX=disabled'
+        state: present
+
+    - name: Reboot the system
+      reboot:
+        reboot_timeout: 300
+        msg: "Reboot initiated by Ansible to apply SELinux changes."
+
+    - name: Wait for the system to start
+      wait_for_connection:
+        timeout: 600
+        sleep: 10
+        delay: 5
+        connect_timeout: 5
+      delegate_to: localhost
+    when: selinux_rs.stdout == 'Enforcing'
+  when: os_family  == "rhel fedora"

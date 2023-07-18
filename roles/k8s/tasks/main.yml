@@ -5,7 +5,6 @@
     block: |
       overlay
       br_netfilter
-  become: true
 
 - name: Edit kernel parameters to ensure packets forward on layer 2 bridge filtered by iptables rules
   blockinfile:
@@ -15,19 +14,16 @@
       net.bridge.bridge-nf-call-iptables = 1
       net.bridge.bridge-nf-call-ip6tables = 1
       net.ipv4.ip_forward = 1
-  become: true
 
 - name: Load sysctl settings
   command: sysctl --system
-  become: true
 
 - name: Check if swap is active
   shell: |
     swapon --show
   args:
     executable: /bin/bash
-  register: swap_rc
-  become: true
+  register: swap_rs
   changed_when: false
 
 - name: Disable swap
@@ -36,45 +32,61 @@
     sed -i '/^[^#].*swap/ s/^/#/' /etc/fstab
   args:
     executable: /bin/bash
-  become: true
-  when: swap_rc.stdout_lines | length == 0
+  when: swap_rs.stdout_lines | length > 0
 
-- name: Install Kubernetes dependency packages
+- name: Install Kubernetes common dependency packages
   package:
-    name: "{{ item }}"
+    name: "{{ k8s_common_packages }}"
     state: present
     update_cache: yes
-  loop: "{{ k8s_dep_packages }}"
-  become: true
 
-- name: Download Kubernetes GPG key
-  get_url:
-    url: "{{ k8s_gpg_keyring }}"
-    dest: /tmp/kubernetes-archive-keyring.gpg
-    mode: '0644'
+- name: Install Kubernetes OS specfic dependency packages
+  package:
+    name: "{{ k8s_specfic_packages[os_family] }}"
+    state: present
+    update_cache: yes
 
-- name: Import GPG keyring file
-  shell: |
-    cat "{{ gpg_keyring_src }}" | gpg --yes --dearmor -o "{{ gpg_keyring_dest }}"
-  args:
-    executable: /bin/bash
+- block:
+  - name: Download Kubernetes GPG key
+    get_url:
+      url: "{{ k8s_apt_gpg_key_mirror if (k8s_install_use_mirror and k8s_apt_gpg_key_mirror is defined) else k8s_apt_gpg_key_mirror }}"
+      dest: "{{ gpg_keyring_src }}"
+      mode: '0644'
+
+  - name: Import GPG keyring file
+    shell: |
+      cat "{{ gpg_keyring_src }}" | gpg --yes --dearmor -o "{{ gpg_keyring_dest }}"
+    args:
+      executable: /bin/bash
+
+  - name: Add Kubernetes repository to source list
+    blockinfile:
+      path: /etc/apt/sources.list.d/kubernetes.list
+      block: |
+        deb [signed-by={{ gpg_keyring_dest }}] {{ k8s_apt_repo_mirror if (k8s_install_use_mirror and k8s_apt_repo_mirror is defined) else k8s_apt_repo }} kubernetes-xenial main
+      create: yes
   vars:
     gpg_keyring_src: "/tmp/kubernetes-archive-keyring.gpg"
     gpg_keyring_dest: "/etc/apt/keyrings/kubernetes-archive-keyring.gpg"
-  become: true
+  when: os_family == "debian"
 
-- name: Add Kubernetes repository to source list
-  blockinfile:
-    path: /etc/apt/sources.list.d/kubernetes.list
-    create: true
-    block: |
-      deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] {{ k8s_apt_repo }} kubernetes-xenial main
-  become: true
+- block:
+  - name: Add Kubernetes yum repository
+    blockinfile:
+      path: /etc/yum.repos.d/kubernetes.repo
+      block: |
+        [kubernetes]
+        name=Kubernetes
+        baseurl={{ k8s_yum_repo_mirror if (k8s_install_use_mirror and k8s_yum_repo_mirror is defined) else k8s_yum_repo }}
+        enabled=1
+        gpgcheck=1
+        repo_gpgcheck=1
+        gpgkey={{ k8s_yum_gpg_key_mirror if (k8s_install_use_mirror and k8s_yum_gpg_key_mirror is defined) else k8s_yum_gpg_key }}
+      create: yes
+  when: os_family == "rhel fedora"
 
-- name: Install Kubernetes packages
+- name: Install Kubernetes package
   package:
-    name: "{{ item }}={{ k8s_version }}*"
+    name: "{{ k8s_install_packages[os_family] }}"
     state: present
     update_cache: yes
-  loop: "{{ k8s_install_packages }}"
-  become: true

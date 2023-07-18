@@ -1,0 +1,24 @@
+- name: Check if at least one proxy is set
+  fail:
+    msg: "http_proxy,https_proxy or socks_proxy at least one is required."
+  when: http_proxy is not defined and https_proxy is not defined and socks_proxy is not defined
+  changed_when: false
+
+- name: Set proxy in profile {{ proxy_profile }}
+  blockinfile:
+    path: "{{ proxy_profile }}"
+    marker: "# {mark} PROXY SETTINGS"
+    block: |
+      http_proxy="{{ http_proxy | default('') }}"
+      https_proxy="{{ https_proxy | default('') }}"
+      socks_proxy="{{ socks_proxy | default('') }}"
+      no_proxy="127.0.0.1,localhost,{{ groups['cluster_hosts'] | map('extract', hostvars, 'ansible_host') | join(',') }},{{ k8s_pod_subnet }},{{ k8s_service_subnet }}"
+
+- name: Reload profile
+  shell: |
+    source {{ proxy_profile }}
+  args:
+    executable: /bin/bash
+  async: 0
+  poll: 0
+  ignore_errors: yes

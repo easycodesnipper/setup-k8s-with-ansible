@@ -1,82 +1,86 @@
 #!/bin/bash -e
 
-# Function to display usage information
+#!/bin/bash
+
+# Default values
+controller=""
+workers=()
+env_vars=""
+
+# Function to display usage message
 function usage() {
-    echo "Usage: $0 --controller=<user@ip[:port]> [--workers=<user@ip[:port]>,[<user@ip[:port]> ...]]"
+  echo "Usage: $0 -c <user@ip[:port]> [-w <user@ip[:port],...>] [-e <key=value> ...]"
+  echo "Options:"
+  echo "  -c, --controller <user@ip[:port]>   Specify the SSH connection pattern for the controller (required)"
+  echo "  -w, --workers <user@ip[:port],...>  Specify the SSH connection patterns for the workers (optional, comma-separated)"
+  echo "  -e, --extra-vars <key=value>            Specify additional environment variables (optional, multiple can be provided)"
+  echo "  -h, --help                              Display this help message"
 }
 
 # Parse command line arguments
-controller=""
-workers=""
-envs=()
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --controller=*)
-            controller="${1#*=}"
-            shift
-            ;;
-        --workers=*)
-            workers="${1#*=}"
-            shift
-            ;;
-        --env=*)
-            IFS=',' read -ra env_array <<< "${1#*=}"
-            for item in "${env_array[@]}"; do
-                envs+=("$item")
-            done
-            shift
-            ;;
-        *)
-            echo "Invalid options"
-            usage
-            exit 1
-            ;;
-    esac
+while getopts ":c:w:e:h" opt; do
+  case ${opt} in
+    c | --controller)
+      controller=$OPTARG
+      ;;
+    w | --workers)
+      IFS=',' read -ra worker_pattern <<< "$OPTARG"
+      for pattern in "${worker_pattern[@]}"; do
+        workers+=("$pattern")
+      done
+      ;;
+    e | --extra-vars)
+      env_vars+=" -e $OPTARG"
+      ;;
+    h | --help)
+      usage
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      usage
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      usage
+      exit 1
+      ;;
+  esac
 done
 
-# Check if required arguments are provided
+# Check for required arguments
 if [[ -z $controller ]]; then
-    echo "Error: At least one controller is required."
-    usage
-    exit 1
+  echo "Error: at least argument -c or --controller is required." >&2
+  usage
+  exit 1
 fi
 
-# Check if Ansible is installed
-function precheck() {
-    ansible --version >/dev/null 2>&1
-    if [[ $? -ne 0 ]]; then
-        echo "Ansible is not installed. Please install Ansible before running this script."
-        exit 1
-    fi
-}
-
-# Extract username, IP address, and port
-function extract_info() {
-    local user_ip_port="$1"
-    local user="$(echo "$user_ip_port" | cut -d'@' -f1)"
-    local ip_port="$(echo "$user_ip_port" | cut -d'@' -f2)"
-    local ip=""
-    local port=""
-    if [[ $ip_port == *":"* ]]; then
-        ip="$(echo "$ip_port" | cut -d':' -f1)"
-        port="$(echo "$ip_port" | cut -d':' -f2)"
-    else
-        ip="$ip_port"
-    fi
-    local info=("$user" "$ip" "${port:-22}")
-    echo "${info[@]}"
+# Function to parse user,ip,port from the SSH connection pattern
+function parse_ssh_connection() {
+  local pattern=$1
+  IFS='@:' read -ra parts <<< "$pattern"
+  local user=${parts[0]}
+  local ip=${parts[1]}
+  local port=${parts[2]:-22}    # Default to port 22 if not specified
+  local info=("$user" "$ip" "${port:-22}")
+  echo "${info[@]}"
 }
 
 # Extract for controller
-controller_info=($(extract_info "$controller"))
-
-# Workers array
-IFS=',' read -ra worker_array <<< "$workers"
+controller_info=($(parse_ssh_connection "$controller"))
 
 # Setup passwordlesss for whole cluster
 cluster+=("$controller")
-cluster+=("${worker_array[@]}")
+cluster+=("${workers[@]}")
 ./setup-passwordless.sh "${cluster[@]}"
+
+# Check if Ansible is installed
+ansible --version >/dev/null 2>&1
+if [[ $? -ne 0 ]]; then
+    echo "Ansible is not installed. Please install Ansible before running this script."
+    exit 1
+fi
 
 # Generate controller block and reference block
 controller_block="$(
@@ -95,9 +99,9 @@ EOF
 
 # Generate workers block and reference block
 workers_block="$(
-    index=0
-    for worker in "${worker_array[@]}"; do
-        worker_info=($(extract_info "$worker"))
+    index=1
+    for worker in "${workers[@]}"; do
+        worker_info=($(parse_ssh_connection "$worker"))
         cat <<EOF
         worker-$index: &worker-$index
           ansible_user: "${worker_info[0]}"
@@ -108,29 +112,16 @@ EOF
     done
 )"
 worker_ref_block="$(
-    index=0
-    for worker in "${worker_array[@]}"; do
+    index=1
+    for worker in "${workers[@]}"; do
         cat <<EOF
         worker-$index: *worker-$index
 EOF
     index=$(( index + 1 ))
     done
 )"
-
-function gen_ansible_env() {
-    env_string=""
-    for item in "${envs[@]}"; do
-        env_string+=" -e $item"
-    done
-    echo "$env_string"
-}
-
-# Ansible playbook with generated inventory file
-ANSIBLE_ROLES_PATH=./roles \
-ANSIBLE_INVENTORY_ENABLED=yaml \
-ansible-playbook -vv \
-$(gen_ansible_env) \
--i <(cat <<EOF
+inventory_file=${inventory_file:-/tmp/inventory.yaml}
+cat <<EOF | tee $inventory_file
 all:
   children:
     cluster_hosts:
@@ -144,4 +135,11 @@ $controller_ref_block
       hosts:
 $worker_ref_block
 EOF
-) ./setup-k8s.yaml | tee /tmp/setup-k8s-$(date +'%Y-%m-%d_%H-%M-%S').log
+# Ansible playbook with generated inventory file
+# set -x
+ANSIBLE_ROLES_PATH=./roles \
+ANSIBLE_INVENTORY_ENABLED=yaml \
+ansible-playbook -vv \
+${env_vars} \
+-i $inventory_file ./setup-k8s.yaml \
+| tee /tmp/setup-k8s-$(date +'%Y-%m-%d_%H-%M-%S').log

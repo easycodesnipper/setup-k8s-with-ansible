@@ -1,0 +1,19 @@
+- name: Create configurations directory for {{ service_name }} service
+  file:
+    path: "/etc/systemd/system/{{ service_name }}.service.d"
+    state: directory
+    mode: '0755'
+
+- name: Get proxy settings from {{ proxy_profile }}
+  shell: | 
+    printf 'Environment="HTTP_PROXY=%s" "HTTPS_PROXY=%s" "NO_PROXY=%s"\n' "$http_proxy" "$https_proxy" "$no_proxy"
+  register: proxy_settings_rs
+
+- name: Create proxy file for {{ service_name }} service
+  blockinfile:
+    path: "/etc/systemd/system/{{ service_name }}.service.d/proxy.conf"
+    marker: "# {mark} PROXY SETTINGS for {{ service_name }}"
+    block: |
+      [Service]
+      {{ proxy_settings_rs.stdout }}"
+    create: yes

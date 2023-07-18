@@ -1,29 +1,59 @@
+k8s_version: "1.27.3"
 
-k8s_dep_packages:
-  - apt-transport-https
+k8s_common_packages:
   - ca-certificates
   - curl
 
-#k8s_gpg_keyring: "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
-k8s_gpg_keyring: "https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg"
-
-# k8s_apt_repo: "https://apt.kubernetes.io/"
-k8s_apt_repo: "https://mirrors.aliyun.com/kubernetes/apt/"
-
-k8s_version: "1.27.3"
+k8s_specfic_packages:
+  debian:
+    - apt-transport-https
+    - software-properties-common
+  "rhel fedora":
+    - yum-utils
 
 k8s_install_packages:
-  - kubelet
-  - kubeadm
-  - kubectl
+  debian:
+    - kubelet={{ k8s_version }}*
+    - kubeadm={{ k8s_version }}*
+    - kubectl={{ k8s_version }}*
+  "rhel fedora":
+    - kubelet-{{ k8s_version }}*
+    - kubeadm-{{ k8s_version }}*
+    - kubectl-{{ k8s_version }}*
 
-k8s_kubeadm_conf: "kubeadm.conf"
-# k8s_image_repository: "registry.k8s.io"
-k8s_image_repository: "registry.aliyuncs.com/google_containers"
+k8s_install_use_mirror: false
 
-k8s_pod_subnet: "10.244.0.0/16"
+# Official kubernetes GPG keyring
+k8s_apt_gpg_key: "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+
+# Aliyun kubernetes GPG keyring
+k8s_apt_gpg_key_mirror: "https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg"
+
+# Official apt repository
+k8s_apt_repo: "https://apt.kubernetes.io/"
+
+# Aliyun apt repository
+k8s_apt_repo_mirror: "https://mirrors.aliyun.com/kubernetes/apt/"
+
+
+# Official yum gpg key
+k8s_yum_gpg_key: "https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg "
+
+# Aliyun yum gpg key
+k8s_yum_gpg_key_mirror: "https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg"
+
+# Official yum repo
+k8s_yum_repo: "https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64"
+# Aliyun yum repo
+k8s_yum_repo_mirror: "https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64"
+
+k8s_image_repository: "registry.k8s.io"
+k8s_image_repository_use_mirror: false
+# Aliyun image repository
+k8s_image_repository_mirror: "registry.aliyuncs.com/google_containers"
+
+k8s_kubeadm_conf: "/tmp/kubeadm.conf"
 
 k8s_cni: "flannel"
-
 k8s_cni_flannel_version: "v0.22.0"
 k8s_cni_flannel_repo: "https://raw.githubusercontent.com/flannel-io/flannel/{{ k8s_cni_flannel_version }}/Documentation/kube-flannel.yml"

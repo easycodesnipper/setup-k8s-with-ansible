@@ -1,21 +1,31 @@
 - name: Check if {{ containerd_cfg_file }} exists
   stat:
     path: "{{ containerd_cfg_file }}"
-  register: containerd_cfg_file_rc
+  register: containerd_cfg_file_rs
 
 - name: Ensure {{ containerd_cfg_file | dirname }} directory exists
   file:
     path: "{{ containerd_cfg_file | dirname  }}"
     state: directory
-  become: true
-  when: not containerd_cfg_file_rc.stat.exists
+  when: not containerd_cfg_file_rs.stat.exists
+
+- name: Check if backup containerd config file exists
+  stat:
+    path: "{{ containerd_cfg_file }}.orig"
+  register: containerd_backup_file_rc
+
+- name: Create backup containerd config file
+  copy:
+    src: "{{ containerd_cfg_file }}"
+    dest: "{{ containerd_cfg_file }}.orig"
+    remote_src: true
+  when: ( containerd_cfg_file_rs.stat.exists ) and ( not containerd_backup_file_rc.stat.exists )
 
 - name: Generate default config file {{ containerd_cfg_file }}
   shell: |
     containerd config default | tee {{ containerd_cfg_file }} > /dev/null
   args:
     executable: /bin/bash
-  become: true
 
 - name: Replace SystemdCgroup = true in {{ containerd_cfg_file }}
   lineinfile:
@@ -23,7 +33,6 @@
     regexp: '^(\s*)SystemdCgroup\s*=\s*false$'
     line: '\g<1>SystemdCgroup = true'
     backrefs: yes
-  become: true
 
 - name: Replace sandbox_image with mirror value in {{ containerd_cfg_file }}
   lineinfile:
@@ -31,12 +40,17 @@
     regexp: '^(\s*)sandbox_image\s*=\s*".*"'
     line: '\g<1>sandbox_image = "{{ containerd_sandbox_image_mirror }}"'
     backrefs: yes
-  become: true
+  when: containerd_sandbox_image_use_mirror and containerd_sandbox_image_mirror is defined
+
+- include_role:
+    name: common
+    tasks_from: proxy_service
+  vars:
+    service_name: "containerd"
+  when: use_proxy
 
 - include_role:
     name: common
     tasks_from: restart_service
   vars:
-    service_name: "{{ item }}"
-  loop:
-    - containerd
+    service_name: "containerd"

@@ -1,9 +1,18 @@
-
-
 - hosts: cluster_hosts
   any_errors_fatal: true
-  gather_facts: yes
+  gather_facts: no
+  become: true
+  vars_files:
+    - vars.yml
   tasks:
+    - name: Set fact for use proxy
+      set_fact:
+        use_proxy: "{{ (use_proxy | default(false) ) or (http_proxy is defined) or (https_proxy is defined) or (socks_proxy is defined) }}"
+
+    - include_role:
+        name: proxy
+      when: use_proxy
+
     - include_role:
         name: precheck
 
@@ -17,14 +26,17 @@
     - include_role:
         name: k8s
         tasks_from: reset
-      when: k8s_reset | default('true')
+      when: k8s_reset | default(false)
 
     - include_role:
         name: k8s
 
 - hosts: controller_hosts
   any_errors_fatal: true
-  gather_facts: yes
+  gather_facts: no
+  become: true
+  vars_files:
+    - vars.yml
   tasks:
     - include_role:
         name: k8s
@@ -32,7 +44,8 @@
 
 - hosts: worker_hosts
   any_errors_fatal: true
-  gather_facts: yes
+  gather_facts: no
+  become: true
   tasks:
     - include_role:
         name: k8s

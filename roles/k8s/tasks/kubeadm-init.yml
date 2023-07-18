@@ -1,5 +1,5 @@
 
-- name: Initialize default kubeadm.conf
+- name: Generate default kubeadm conf file {{ k8s_kubeadm_conf }}
   shell: |
     kubeadm config print init-defaults > {{ k8s_kubeadm_conf }}
   args:
@@ -9,7 +9,7 @@
   lineinfile:
     path: "{{ k8s_kubeadm_conf }}"
     regexp: '^\s*name:\s*.*'
-    line: "  name: {{ hostvars[inventory_hostname]['ansible_hostname'] }}"
+    line: "  name: {{ hostname }}"
 
 - name: Customize kubeadm.conf `advertiseAddress` with ip
   lineinfile:
@@ -21,7 +21,15 @@
   lineinfile:
     path: "{{ k8s_kubeadm_conf }}"
     regexp: '^\s*imageRepository:\s*.*'
-    line: 'imageRepository: {{ k8s_image_repository }}'
+    line: 'imageRepository: {{ k8s_image_repository_mirror }}'
+  when: k8s_image_repository_use_mirror and k8s_image_repository_mirror is defined
+
+- name: Customize kubeadm.conf `serviceSubnet` with specified
+  lineinfile:
+    path: "{{ k8s_kubeadm_conf }}"
+    regexp: '^\s*serviceSubnet:\s*.*'
+    line: "  serviceSubnet: {{ k8s_service_subnet }}"
+  when: k8s_service_subnet is defined
 
 - name: Customize kubeadm.conf `podSubnet` with specified
   blockinfile:
@@ -32,34 +40,33 @@
 
 - name: Kubeadm init with customized kubeadm.conf
   shell: |
-    kubeadm init --config={{ k8s_kubeadm_conf }}
+    kubeadm init --config={{ k8s_kubeadm_conf }} --v=9
   args:
     executable: /bin/bash
-  become: true
 
-- name: Create user's kube directory
+- name: Create user's kubeconfig directory for user {{ ansible_user }}
   file:
-    path: "{{ ansible_user_dir }}/.kube"
+    path: "/home/{{ ansible_user }}/.kube"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
     state: directory
     mode: "0755"
 
 - name: Copy admin.conf to user's kubeconfig directory
   copy:
     src: /etc/kubernetes/admin.conf
-    dest: "{{ ansible_user_dir }}/.kube/config"
+    dest: "/home/{{ ansible_user }}/.kube/config"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0644"
     remote_src: yes
-  become: true
 
 - name: Set correct ownership for kubeconfig
   file:
-    path: "{{ ansible_user_dir }}/.kube/config"
+    path: "/home/{{ ansible_user }}/.kube/config"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0600"
-  become: true
 
 - include_tasks:
     file: "cni-{{ k8s_cni }}.yml"
@@ -72,3 +79,14 @@
   loop:
     - containerd
     - kubelet
+
+- name: Remove untolerated taints
+  shell: |
+    kubectl taint nodes --all {{ item }}-
+  args:
+    executable: /bin/bash
+  loop:
+    - node-role.kubernetes.io/master
+    - node-role.kubernetes.io/control-plane
+  ignore_errors: yes
+  become_user: "{{ ansible_user }}"

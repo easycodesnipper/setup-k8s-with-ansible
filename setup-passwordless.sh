@@ -33,7 +33,7 @@ for remote_server in "$@"; do
     # Check if ssh-copy-id was successful
     if [[ $? -eq 0 ]]; then
         echo "SSH passwordless setup completed successfully for $remote_server."
-        ssh -p "$port" "$user@$ip" "sudo grep -q \"$user\" /etc/sudoers || echo \"$user ALL=(ALL) NOPASSWD:ALL\" | sudo tee -a /etc/sudoers"
+        ssh -p "$port" "$user@$ip" "sudo -S grep -q \"$user\" /etc/sudoers || echo \"$user ALL=(ALL) NOPASSWD:ALL\" | sudo tee -a /etc/sudoers"
         if [[ $? -eq 0 ]]; then
             echo "Adding user $user to sudoers group with passwordless completed successfully for $remote_server."
         fi

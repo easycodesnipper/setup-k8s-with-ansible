@@ -5,7 +5,6 @@
     executable: /bin/bash
   register: print_join_cmd
   delegate_to: 'controller'
-  become: true
 
 - name: Kubeadm join worker
   shell: |
@@ -16,7 +15,6 @@
   until: kubeadm_join_cmd is success
   retries: 3
   delay: 15
-  become: true
 
 - include_role:
     name: common

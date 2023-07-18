@@ -1,0 +1,4 @@
+k8s_pod_subnet: "10.244.0.0/16"
+k8s_service_subnet: "10.96.0.0/12"
+use_proxy: false
+proxy_profile: "/etc/environment"
