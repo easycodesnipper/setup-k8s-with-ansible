@@ -1,7 +1,11 @@
 - name: Check if at least one proxy is set
   fail:
     msg: "http_proxy,https_proxy or socks_proxy at least one is required."
-  when: http_proxy is not defined and https_proxy is not defined and socks_proxy is not defined
+  when: 
+    - use_proxy
+    - http_proxy is not defined
+    - https_proxy is not defined
+    - socks_proxy is not defined
   changed_when: false
 
 - name: Set proxy in profile {{ proxy_profile }}

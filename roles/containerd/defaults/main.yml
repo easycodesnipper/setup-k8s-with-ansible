@@ -1,4 +1,5 @@
 containerd_cfg_file: "/etc/containerd/config.toml"
 
-containerd_sandbox_image_use_mirror: false
-containerd_sandbox_image_mirror: "registry.aliyuncs.com/google_containers/pause:3.9"
+containerd_sandbox_image:
+  Aliyun: "registry.aliyuncs.com/google_containers/pause:3.9"
+  AzureChinaCloud: "gcr.azk8s.cn/google_containers/pause-amd64:3.0"

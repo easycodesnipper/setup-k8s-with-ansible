@@ -21,8 +21,8 @@
   lineinfile:
     path: "{{ k8s_kubeadm_conf }}"
     regexp: '^\s*imageRepository:\s*.*'
-    line: 'imageRepository: {{ k8s_image_repository_mirror }}'
-  when: k8s_image_repository_use_mirror and k8s_image_repository_mirror is defined
+    line: 'imageRepository: {{ k8s_image_repository[mirror] }}'
+  when: use_mirror and mirror is defined
 
 - name: Customize kubeadm.conf `serviceSubnet` with specified
   lineinfile:

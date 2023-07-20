@@ -14,10 +14,6 @@ docker_config_paths:
 
 docker_version: "24.0.4"
 
-docker_install_use_mirror: false
-# Aliyun or AzureChinaCloud is acceptable value
-docker_install_mirror: "Aliyun"
-
 docker_daemon_json: "/etc/docker/daemon.json"
 docker_data_root: "/var/lib/docker"
 docker_registry_mirrors: []

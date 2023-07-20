@@ -21,7 +21,7 @@
       name: common
       tasks_from: stop_service
     vars:
-      service_name: "{{ docker }}"
+      service_name: "docker"
     when: docker_installed_rs.rc == 0
 
   - name: Uninstall Docker
@@ -52,8 +52,8 @@
   - name: Install docker with downloaded install script
     shell: |
       /tmp/install-docker.sh \
-      {% if docker_install_use_mirror and docker_install_mirror is defined %}
-        --mirror "{{ docker_install_mirror }}" \
+      {% if use_mirror and mirror is defined %}
+        --mirror "{{ mirror }}" \
       {% endif %}
       --version "{{ docker_version }}"
     args:
@@ -118,7 +118,6 @@
     tasks_from: proxy_service
   vars:
     service_name: "docker"
-  when: use_proxy
 
 - include_role:
     name: common

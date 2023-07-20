@@ -6,7 +6,7 @@
 
 - name: Get proxy settings from {{ proxy_profile }}
   shell: | 
-    printf 'Environment="HTTP_PROXY=%s" "HTTPS_PROXY=%s" "NO_PROXY=%s"\n' "$http_proxy" "$https_proxy" "$no_proxy"
+    printf "Environment=HTTP_PROXY=\"%s\" HTTPS_PROXY=\"%s\" NO_PROXY=\"%s\"\n" "$http_proxy" "$https_proxy" "$no_proxy"
   register: proxy_settings_rs
 
 - name: Create proxy file for {{ service_name }} service
@@ -15,5 +15,5 @@
     marker: "# {mark} PROXY SETTINGS for {{ service_name }}"
     block: |
       [Service]
-      {{ proxy_settings_rs.stdout }}"
+      {{ proxy_settings_rs.stdout }}
     create: yes

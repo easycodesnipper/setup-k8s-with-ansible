@@ -1,21 +1,14 @@
-- name: Get variables ending with "_mirror"
-  set_fact:
-    mirror_vars: "{{ hostvars[inventory_hostname] | dict2items | selectattr('key', 'match', '.*_mirror$') | map(attribute='value') | list }}"
+- name: Check if mirror is set if use mirror
+  fail:
+    msg: "mirror is required since use_mirror is true"
+  when: 
+    - use_mirror
+    - mirror is not defined
+  changed_when: false
 
 - name: Gather facts only for package_facts
   setup:
     gather_subset: ['!all', '!facter']  # Exclude all subsets except 'facter'
-
-- name: Debug Extra Variables
-  debug:
-    msg: |
-      {{ hostvars[inventory_hostname] }}
-      ----------------------------------
-      {{ groups['cluster_hosts'] | map('extract', hostvars, 'ansible_host') | join(',') }}
-      ----------------------------------
-      {{ mirror_vars }}
-      ----------------------------------
-      {{ ansible_pkg_mgr }}
 
 - name: Read os family from /etc/os-release
   shell: |
@@ -42,6 +35,20 @@
   fail:
     msg: "The hostname {{ hostname_rs }} does not match RFC 1178."
   when: hostname is not match(rfc1178_regex)
+
+- block:
+  - name: Cleanup Docker repo if use mirror
+    file:
+      path: "{{ '/etc/apt/sources.list.d/docker.list' if (os_family == 'debian') else '/etc/yum.repos.d/docker-ce.repo' }}"
+      state: absent
+    ignore_errors: yes
+
+  - name: Cleanup Kubernetes repo if use mirror
+    file:
+      path: "{{ '/etc/apt/sources.list.d/kubernetes.list' if (os_family == 'debian') else '/etc/yum.repos.d/kubernetes.repo' }}"
+      state: absent
+    ignore_errors: yes
+  when: use_mirror and mirror is defined
 
 - name: Update package cache
   command: "{{ 'apt update -y' if ansible_facts.pkg_mgr == 'apt' else 'yum updateinfo -y' }}"

@@ -49,7 +49,7 @@
 - block:
   - name: Download Kubernetes GPG key
     get_url:
-      url: "{{ k8s_apt_gpg_key_mirror if (k8s_install_use_mirror and k8s_apt_gpg_key_mirror is defined) else k8s_apt_gpg_key_mirror }}"
+      url: "{{ k8s_apt_key[mirror] if (use_mirror and mirror is defined) else k8s_apt_key['Official'] }}"
       dest: "{{ gpg_keyring_src }}"
       mode: '0644'
 
@@ -63,7 +63,7 @@
     blockinfile:
       path: /etc/apt/sources.list.d/kubernetes.list
       block: |
-        deb [signed-by={{ gpg_keyring_dest }}] {{ k8s_apt_repo_mirror if (k8s_install_use_mirror and k8s_apt_repo_mirror is defined) else k8s_apt_repo }} kubernetes-xenial main
+        deb [signed-by={{ gpg_keyring_dest }}] {{ k8s_apt_repo[mirror] if (use_mirror and mirror is defined) else k8s_apt_repo['Official'] }} kubernetes-xenial main
       create: yes
   vars:
     gpg_keyring_src: "/tmp/kubernetes-archive-keyring.gpg"
@@ -77,11 +77,11 @@
       block: |
         [kubernetes]
         name=Kubernetes
-        baseurl={{ k8s_yum_repo_mirror if (k8s_install_use_mirror and k8s_yum_repo_mirror is defined) else k8s_yum_repo }}
+        baseurl={{ k8s_yum_repo[mirror] if (use_mirror and mirror is defined) else k8s_yum_repo['Official'] }}
         enabled=1
         gpgcheck=1
         repo_gpgcheck=1
-        gpgkey={{ k8s_yum_gpg_key_mirror if (k8s_install_use_mirror and k8s_yum_gpg_key_mirror is defined) else k8s_yum_gpg_key }}
+        gpgkey={{ k8s_yum_key[mirror] if (use_mirror and mirror is defined) else k8s_yum_key['Official'] }}
       create: yes
   when: os_family == "rhel fedora"
 
@@ -90,3 +90,7 @@
     name: "{{ k8s_install_packages[os_family] }}"
     state: present
     update_cache: yes
+  register: install_k8s_pkg_rs
+  until: install_k8s_pkg_rs is success
+  retries: 3
+  delay: 15

@@ -5,13 +5,13 @@
   vars_files:
     - vars.yml
   tasks:
-    - name: Set fact for use proxy
+    - name: Set facts
       set_fact:
         use_proxy: "{{ (use_proxy | default(false) ) or (http_proxy is defined) or (https_proxy is defined) or (socks_proxy is defined) }}"
+        use_mirror: "{{ (use_mirror | default(false) ) or mirror is defined }}"
 
     - include_role:
         name: proxy
-      when: use_proxy
 
     - include_role:
         name: precheck
