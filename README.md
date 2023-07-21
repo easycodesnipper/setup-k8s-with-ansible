@@ -1,4 +1,4 @@
-Setup Kubernetes with Ansible Playbook
+# Setup Kubernetes with Ansible Playbook
 
 ```shell
 Usage: ./setup-k8s.sh -c <user@ip[:port]> [-w <user@ip[:port],...>] [-e <key=value> ...]
