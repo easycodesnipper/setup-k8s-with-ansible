@@ -2,4 +2,5 @@ containerd_cfg_file: "/etc/containerd/config.toml"
 
 containerd_sandbox_image:
   Aliyun: "registry.aliyuncs.com/google_containers/pause:3.9"
-  AzureChinaCloud: "gcr.azk8s.cn/google_containers/pause-amd64:3.0"
+  # Since currently GCR only work for Azure China IP, fake it with Aliyun
+  AzureChinaCloud: "registry.aliyuncs.com/google_containers/pause:3.9"

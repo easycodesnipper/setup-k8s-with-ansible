@@ -1,6 +1,6 @@
 - name: Install CNI flannel
   shell: |
-    kubectl create -f {{ k8s_cni_flannel_repo }} --v=9
+    kubectl apply -f {{ k8s_cni_flannel_repo }} --v={{ k8s_verbose }}
   args:
     executable: /bin/bash
   register: install_flannel_rs

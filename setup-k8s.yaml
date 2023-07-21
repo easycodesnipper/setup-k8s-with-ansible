@@ -25,11 +25,6 @@
 
     - include_role:
         name: k8s
-        tasks_from: reset
-      when: k8s_reset | default(false)
-
-    - include_role:
-        name: k8s
 
 - hosts: controller_hosts
   any_errors_fatal: true
@@ -50,3 +45,12 @@
     - include_role:
         name: k8s
         tasks_from: kubeadm-join
+
+- hosts: controller_hosts
+  any_errors_fatal: true
+  gather_facts: no
+  become: true
+  tasks:
+    - include_role:
+        name: k8s
+        tasks_from: post-install

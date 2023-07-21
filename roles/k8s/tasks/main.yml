@@ -1,76 +1,92 @@
-- name: Load kernel modules to allow iptables to check bridge traffic
-  blockinfile:
-    path: /etc/modules-load.d/k8s.conf
-    create: true
-    block: |
-      overlay
-      br_netfilter
-
-- name: Edit kernel parameters to ensure packets forward on layer 2 bridge filtered by iptables rules
-  blockinfile:
-    path: /etc/sysctl.d/k8s.conf
-    create: true
-    block: |
-      net.bridge.bridge-nf-call-iptables = 1
-      net.bridge.bridge-nf-call-ip6tables = 1
-      net.ipv4.ip_forward = 1
-
-- name: Load sysctl settings
-  command: sysctl --system
-
-- name: Check if swap is active
+- name: Get Kubernetes version
   shell: |
-    swapon --show
+    kubectl version --client -o yaml | awk '/gitVersion/ {print substr($2, 2)}'
   args:
     executable: /bin/bash
-  register: swap_rs
-  changed_when: false
+  register: k8s_version_rs
+  ignore_errors: yes
 
-- name: Disable swap
-  shell: |
-    swapoff -a
-    sed -i '/^[^#].*swap/ s/^/#/' /etc/fstab
-  args:
-    executable: /bin/bash
-  when: swap_rs.stdout_lines | length > 0
-
-- name: Install Kubernetes common dependency packages
-  package:
-    name: "{{ k8s_common_packages }}"
-    state: present
-    update_cache: yes
-
-- name: Install Kubernetes OS specfic dependency packages
-  package:
-    name: "{{ k8s_specfic_packages[os_family] }}"
-    state: present
-    update_cache: yes
+- name: Set fact for k8s_version_matches
+  set_fact:
+    k8s_version_matches: "{{ ( k8s_version_rs.stdout_lines | length == 1 ) and ( k8s_version_rs.stdout is version(k8s_version, '>=') ) }}"
+  when: k8s_version_rs is success
 
 - block:
-  - name: Download Kubernetes GPG key
-    get_url:
-      url: "{{ k8s_apt_key[mirror] if (use_mirror and mirror is defined) else k8s_apt_key['Official'] }}"
-      dest: "{{ gpg_keyring_src }}"
-      mode: '0644'
+  - include_tasks:
+      file: "reset.yml"
 
-  - name: Import GPG keyring file
+  - name: Load kernel modules to allow iptables to check bridge traffic
+    blockinfile:
+      path: /etc/modules-load.d/k8s.conf
+      create: true
+      block: |
+        overlay
+        br_netfilter
+
+  - name: Edit kernel parameters to ensure packets forward on layer 2 bridge filtered by iptables rules
+    blockinfile:
+      path: /etc/sysctl.d/k8s.conf
+      create: true
+      block: |
+        net.bridge.bridge-nf-call-iptables = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+        net.ipv4.ip_forward = 1
+
+  - name: Load sysctl settings
+    command: sysctl --system
+
+  - name: Check if swap is active
     shell: |
-      cat "{{ gpg_keyring_src }}" | gpg --yes --dearmor -o "{{ gpg_keyring_dest }}"
+      swapon --show
     args:
       executable: /bin/bash
+    register: swap_rs
+    changed_when: false
 
-  - name: Add Kubernetes repository to source list
-    blockinfile:
-      path: /etc/apt/sources.list.d/kubernetes.list
-      block: |
-        deb [signed-by={{ gpg_keyring_dest }}] {{ k8s_apt_repo[mirror] if (use_mirror and mirror is defined) else k8s_apt_repo['Official'] }} kubernetes-xenial main
-      create: yes
-  vars:
-    gpg_keyring_src: "/tmp/kubernetes-archive-keyring.gpg"
-    gpg_keyring_dest: "/etc/apt/keyrings/kubernetes-archive-keyring.gpg"
-  when: os_family == "debian"
+  - name: Disable swap
+    shell: |
+      swapoff -a
+      sed -i '/^[^#].*swap/ s/^/#/' /etc/fstab
+    args:
+      executable: /bin/bash
+    when: swap_rs.stdout_lines | length > 0
 
-- block:
+  - name: Install Kubernetes common dependency packages
+    package:
+      name: "{{ k8s_common_packages }}"
+      state: present
+      update_cache: yes
+
+  - name: Install Kubernetes OS specific dependency packages
+    package:
+      name: "{{ k8s_specific_packages[os_family] }}"
+      state: present
+      update_cache: yes
+
+  - block:
+    - name: Download Kubernetes GPG key
+      get_url:
+        url: "{{ k8s_apt_key[mirror] if (use_mirror and mirror is defined) else k8s_apt_key['Official'] }}"
+        dest: "{{ gpg_keyring_src }}"
+        mode: '0644'
+
+    - name: Import GPG keyring file
+      shell: |
+        cat "{{ gpg_keyring_src }}" | gpg --yes --dearmor -o "{{ gpg_keyring_dest }}"
+      args:
+        executable: /bin/bash
+
+    - name: Add Kubernetes repository to source list
+      blockinfile:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        block: |
+          deb [signed-by={{ gpg_keyring_dest }}] {{ k8s_apt_repo[mirror] if (use_mirror and mirror is defined) else k8s_apt_repo['Official'] }} kubernetes-xenial main
+        create: yes
+    vars:
+      gpg_keyring_src: "/tmp/kubernetes-archive-keyring.gpg"
+      gpg_keyring_dest: "/etc/apt/keyrings/kubernetes-archive-keyring.gpg"
+    when: os_family == "debian"
+
   - name: Add Kubernetes yum repository
     blockinfile:
       path: /etc/yum.repos.d/kubernetes.repo
@@ -83,14 +99,15 @@
         repo_gpgcheck=1
         gpgkey={{ k8s_yum_key[mirror] if (use_mirror and mirror is defined) else k8s_yum_key['Official'] }}
       create: yes
-  when: os_family == "rhel fedora"
+    when: os_family == "rhel fedora"
 
-- name: Install Kubernetes package
-  package:
-    name: "{{ k8s_install_packages[os_family] }}"
-    state: present
-    update_cache: yes
-  register: install_k8s_pkg_rs
-  until: install_k8s_pkg_rs is success
-  retries: 3
-  delay: 15
+  - name: Install Kubernetes package
+    package:
+      name: "{{ k8s_install_packages[os_family] }}"
+      state: present
+      update_cache: yes
+    register: install_k8s_pkg_rs
+    until: install_k8s_pkg_rs is success
+    retries: 3
+    delay: 15
+  when: k8s_reset or ( not (k8s_version_matches | default(false)))  

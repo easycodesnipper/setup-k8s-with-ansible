@@ -1,26 +1,40 @@
 
-- name: Print join command
-  shell: kubeadm token create --print-join-command
-  args:
-    executable: /bin/bash
-  register: print_join_cmd
-  delegate_to: 'controller'
-
-- name: Kubeadm join worker
+- name: Check if node already joined with Ready status
   shell: |
-    {{ print_join_cmd.stdout_lines[0] }}
+    kubectl get node {{ hostname }} | awk 'NR>1{print $2}'
   args:
     executable: /bin/bash
-  register: kubeadm_join_cmd
-  until: kubeadm_join_cmd is success
-  retries: 3
-  delay: 15
+  register: check_ready_node_rs
+  ignore_errors: yes
+  delegate_to: 'controller'
+  become_user: "{{ hostvars['controller'].ansible_user }}"
 
-- include_role:
-    name: common
-    tasks_from: restart_service
-  vars:
-    service_name: "{{ item }}"
-  loop:
-    - containerd
-    - kubelet
+- block:
+  - name: Print join command
+    shell: |
+      kubeadm token create --print-join-command
+    args:
+      executable: /bin/bash
+    register: print_join_cmd
+    delegate_to: 'controller'
+
+  - name: Kubeadm join worker
+    shell: |
+      {{ print_join_cmd.stdout_lines[0] }}
+    args:
+      executable: /bin/bash
+    register: kubeadm_join_cmd
+    until: kubeadm_join_cmd is success
+    retries: 3
+    delay: 15
+    ignore_errors: yes
+
+  - include_role:
+      name: common
+      tasks_from: restart_service
+    vars:
+      service_name: "{{ item }}"
+    loop:
+      - containerd
+      - kubelet
+  when: (k8s_reset or (check_ready_node_rs is not success))

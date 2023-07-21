@@ -1,99 +1,110 @@
 
-- name: Generate default kubeadm conf file {{ k8s_kubeadm_conf }}
+- name: Check if kubernetes initialized
   shell: |
-    kubeadm config print init-defaults > {{ k8s_kubeadm_conf }}
+    kubectl get pods
   args:
     executable: /bin/bash
-
-- name: Customize kubeadm.conf `name` with hostname
-  lineinfile:
-    path: "{{ k8s_kubeadm_conf }}"
-    regexp: '^\s*name:\s*.*'
-    line: "  name: {{ hostname }}"
-
-- name: Customize kubeadm.conf `advertiseAddress` with ip
-  lineinfile:
-    path: "{{ k8s_kubeadm_conf }}"
-    regexp: '^\s*advertiseAddress:\s*.*'
-    line: "  advertiseAddress: {{ hostvars[inventory_hostname]['ansible_host'] }}"
-
-- name: Customize kubeadm.conf `imageRepository` with mirror repository
-  lineinfile:
-    path: "{{ k8s_kubeadm_conf }}"
-    regexp: '^\s*imageRepository:\s*.*'
-    line: 'imageRepository: {{ k8s_image_repository[mirror] }}'
-  when: use_mirror and mirror is defined
-
-- name: Customize kubeadm.conf `serviceSubnet` with specified
-  lineinfile:
-    path: "{{ k8s_kubeadm_conf }}"
-    regexp: '^\s*serviceSubnet:\s*.*'
-    line: "  serviceSubnet: {{ k8s_service_subnet }}"
-  when: k8s_service_subnet is defined
-
-- name: Customize kubeadm.conf `podSubnet` with specified
-  blockinfile:
-    path: "{{ k8s_kubeadm_conf }}"
-    insertbefore: '^\s*serviceSubnet:\s*.*'
-    block: |
-      {{'  '}}podSubnet: {{ k8s_pod_subnet }}
-
-- name: Kubeadm init with customized kubeadm.conf
-  shell: |
-    kubeadm init --config={{ k8s_kubeadm_conf }} --v=9
-  args:
-    executable: /bin/bash
-
-- name: Create user's kubeconfig directory for user {{ ansible_user }}
-  file:
-    path: "/home/{{ ansible_user }}/.kube"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
-    state: directory
-    mode: "0755"
-
-- name: Copy admin.conf to user's kubeconfig directory
-  copy:
-    src: /etc/kubernetes/admin.conf
-    dest: "/home/{{ ansible_user }}/.kube/config"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
-    mode: "0644"
-    remote_src: yes
-
-- name: Set correct ownership for kubeconfig
-  file:
-    path: "/home/{{ ansible_user }}/.kube/config"
-    owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
-    mode: "0600"
-
-- include_role:
-    name: common
-    tasks_from: restart_service
-  vars:
-    service_name: "systemd-resolved"
-  when: os_family == "rhel fedora"
-
-- include_tasks:
-    file: "cni-{{ k8s_cni }}.yml"
-
-- include_role:
-    name: common
-    tasks_from: restart_service
-  vars:
-    service_name: "{{ item }}"
-  loop:
-    - containerd
-    - kubelet
-
-- name: Remove untolerated taints
-  shell: |
-    kubectl taint nodes --all {{ item }}-
-  args:
-    executable: /bin/bash
-  loop:
-    - node-role.kubernetes.io/master
-    - node-role.kubernetes.io/control-plane
   ignore_errors: yes
   become_user: "{{ ansible_user }}"
+  register: k8s_init_rs
+
+- block:
+  - name: Generate default kubeadm conf file {{ k8s_kubeadm_conf }}
+    shell: |
+      kubeadm config print init-defaults > {{ k8s_kubeadm_conf }}
+    args:
+      executable: /bin/bash
+
+  - name: Customize kubeadm.conf `name` with hostname
+    lineinfile:
+      path: "{{ k8s_kubeadm_conf }}"
+      regexp: '^\s*name:\s*.*'
+      line: "  name: {{ hostname }}"
+
+  - name: Customize kubeadm.conf `advertiseAddress` with ip
+    lineinfile:
+      path: "{{ k8s_kubeadm_conf }}"
+      regexp: '^\s*advertiseAddress:\s*.*'
+      line: "  advertiseAddress: {{ hostvars[inventory_hostname]['ansible_host'] }}"
+
+  - name: Customize kubeadm.conf `imageRepository` with mirror repository
+    lineinfile:
+      path: "{{ k8s_kubeadm_conf }}"
+      regexp: '^\s*imageRepository:\s*.*'
+      line: 'imageRepository: {{ k8s_image_repository[mirror] }}'
+    when: use_mirror and mirror is defined
+
+  - name: Customize kubeadm.conf `serviceSubnet` with specified
+    lineinfile:
+      path: "{{ k8s_kubeadm_conf }}"
+      regexp: '^\s*serviceSubnet:\s*.*'
+      line: "  serviceSubnet: {{ k8s_service_subnet }}"
+    when: k8s_service_subnet is defined
+
+  - name: Customize kubeadm.conf `podSubnet` with specified
+    blockinfile:
+      path: "{{ k8s_kubeadm_conf }}"
+      insertbefore: '^\s*serviceSubnet:\s*.*'
+      block: |
+        {{'  '}}podSubnet: {{ k8s_pod_subnet }}
+
+  - name: Kubeadm init with customized kubeadm.conf
+    shell: |
+      kubeadm init --config={{ k8s_kubeadm_conf }} --v={{ k8s_verbose }}
+    args:
+      executable: /bin/bash
+
+  - name: Create user's kubeconfig directory for user {{ ansible_user }}
+    file:
+      path: "/home/{{ ansible_user }}/.kube"
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+      state: directory
+      mode: "0755"
+
+  - name: Copy admin.conf to user's kubeconfig directory
+    copy:
+      src: /etc/kubernetes/admin.conf
+      dest: "/home/{{ ansible_user }}/.kube/config"
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+      mode: "0644"
+      remote_src: yes
+
+  - name: Set correct ownership for kubeconfig
+    file:
+      path: "/home/{{ ansible_user }}/.kube/config"
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+      mode: "0600"
+
+  - include_role:
+      name: common
+      tasks_from: restart_service
+    vars:
+      service_name: "systemd-resolved"
+    when: os_family == "rhel fedora"
+
+  - include_tasks:
+      file: "cni-{{ k8s_cni }}.yml"
+
+  - include_role:
+      name: common
+      tasks_from: restart_service
+    vars:
+      service_name: "{{ item }}"
+    loop:
+      - containerd
+      - kubelet
+
+  - name: Remove untolerated taints
+    shell: |
+      kubectl taint nodes --all {{ item }}-
+    args:
+      executable: /bin/bash
+    loop:
+      - node-role.kubernetes.io/master
+      - node-role.kubernetes.io/control-plane
+    ignore_errors: yes
+    become_user: "{{ ansible_user }}"
+  when: (k8s_reset or (k8s_init_rs is not success))

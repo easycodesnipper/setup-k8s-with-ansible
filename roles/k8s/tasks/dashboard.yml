@@ -1,0 +1,44 @@
+- name: Download Kubernetes Dashboard YAML
+  get_url:
+    url: "{{ k8s_dashboard_repo }}"
+    dest: "/tmp/k8s-dashboard.yaml"
+  register: download_dashboard_rs
+  until: download_dashboard_rs is success
+  retries: 3
+  delay: 15
+
+- name: Insert nodePort for kubernetes-dashboard
+  blockinfile:
+    path: /tmp/k8s-dashboard.yaml
+    insertafter: '^\s*targetPort: 8443\s*.*'
+    marker: "# {mark} nodePort for kubernetes-dashboard"
+    block: |
+      {{'      '}}nodePort: {{ k8s_dashboard_nodeport }}
+      {{'  '}}type: NodePort
+
+- name: Insert nodePort for dashboard-metrics-scraper
+  blockinfile:
+    path: /tmp/k8s-dashboard.yaml
+    insertafter: '^\s*targetPort: 8000\s*.*'
+    marker: "# {mark} nodePort for dashboard-metrics-scraper"
+    block: |
+      {{'      '}}nodePort: {{ k8s_dashboard_metrics_scraper_nodeport }}
+      {{'  '}}type: NodePort
+
+- name: Create Kubernetes Dashboard admin user and role
+  template:
+    src: dashboard-admin.yaml.j2
+    dest: /tmp/k8s-dashboard-admin.yaml
+    mode: '0644'
+
+- name: Install Kubernetes Dashboard
+  shell: |
+    kubectl apply -f /tmp/k8s-dashboard.yaml --v={{ k8s_verbose }}
+    kubectl apply -f /tmp/k8s-dashboard-admin.yaml --v={{ k8s_verbose }}
+  args:
+    executable: /bin/bash
+  register: install_dashboard_rs
+  until: install_dashboard_rs is success
+  retries: 3
+  delay: 15
+  become_user: "{{ ansible_user }}"

@@ -1,8 +1,3 @@
-- name: Check if Docker is installed
-  command: which docker
-  register: docker_installed_rs
-  ignore_errors: yes
-
 - name: Get docker version
   shell: |
     docker --version | awk '{print $3}' | cut -d ',' -f 1
@@ -10,11 +5,11 @@
     executable: /bin/bash
   register: docker_version_rs
   ignore_errors: yes
-  when: docker_installed_rs.rc == 0
 
 - name: Set fact for docker_version_matches
   set_fact:
-    docker_version_matches: "{{ (docker_installed_rs.rc == 0) and ( docker_version_rs.stdout_lines | length == 1 ) and ( docker_version_rs.stdout is version(docker_version, '>=') ) }}"
+    docker_version_matches: "{{ ( docker_version_rs.stdout_lines | length == 1 ) and ( docker_version_rs.stdout is version(docker_version, '>=') ) }}"
+  when: docker_version_rs is success
 
 - block:
   - include_role:
@@ -72,7 +67,7 @@
   - include_role:
       name: common
       tasks_from: reset_connection
-  when: docker_reset or ( not docker_version_matches )
+  when: docker_reset or ( not (docker_version_matches | default(false) ) )
 
 - name: Check if {{ docker_daemon_json }} exists
   stat:

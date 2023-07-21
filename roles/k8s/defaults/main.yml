@@ -1,10 +1,11 @@
 k8s_version: "1.27.3"
+k8s_verbose: "0"
 
 k8s_common_packages:
   - ca-certificates
   - curl
 
-k8s_specfic_packages:
+k8s_specific_packages:
   debian:
     - apt-transport-https
     - software-properties-common
@@ -19,36 +20,52 @@ k8s_install_packages:
     - kubeadm={{ k8s_version }}*
     - kubectl={{ k8s_version }}*
   "rhel fedora":
-    - kubelet-{{ k8s_version }}*
-    - kubeadm-{{ k8s_version }}*
-    - kubectl-{{ k8s_version }}*
+    - kubelet-{{ k8s_version }}
+    - kubeadm-{{ k8s_version }}
+    - kubectl-{{ k8s_version }}
 
 k8s_apt_key:
   Official: "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
   Aliyun: "https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg"
+  AzureChinaCloud: "http://mirror.azure.cn/kubernetes/packages/apt/doc/apt-key.gpg"
 
 # Official apt repository
 k8s_apt_repo:
   Official: "https://apt.kubernetes.io/"
   Aliyun: "https://mirrors.aliyun.com/kubernetes/apt/"
+  AzureChinaCloud: "https://mirror.azure.cn/kubernetes/packages/apt/"
 
 
 # Official yum gpg key
 k8s_yum_key: 
   Official: "https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg "
   Aliyun: "https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg"
+  AzureChinaCloud: "https://mirror.azure.cn/kubernetes/packages/yum/doc/yum-key.gpg https://mirror.azure.cn/kubernetes/packages/yum/doc/rpm-package-key.gpg"
 
 # Official yum repo
 k8s_yum_repo: 
   Official: "https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64"
   Aliyun: "https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64"
+  AzureChinaCloud: "https://mirror.azure.cn/kubernetes/packages/yum/repos/kubernetes-el7-x86_64"
 
 k8s_image_repository: 
   Official: "registry.k8s.io"
   Aliyun: "registry.aliyuncs.com/google_containers"
+  # Since currently GCR only work for Azure China IP, fake it with Aliyun
+  AzureChinaCloud: "registry.aliyuncs.com/google_containers"
 
 k8s_kubeadm_conf: "/tmp/kubeadm.conf"
 
 k8s_cni: "flannel"
 k8s_cni_flannel_version: "v0.22.0"
 k8s_cni_flannel_repo: "https://github.com/flannel-io/flannel/releases/download/{{ k8s_cni_flannel_version }}/kube-flannel.yml"
+
+k8s_dashboard_enabled: false
+k8s_dashboard_version: "v2.7.0"
+k8s_dashboard_repo: "https://raw.githubusercontent.com/kubernetes/dashboard/{{ k8s_dashboard_version }}/aio/deploy/recommended.yaml"
+k8s_dashboard_nodeport: "31443"
+k8s_dashboard_metrics_scraper_nodeport: "31080"
+k8s_dashboard_admin: "admin"
+
+# Force to uninstall kubernetes
+k8s_reset: false
