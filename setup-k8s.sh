@@ -5,6 +5,7 @@
 # Default values
 controller=""
 workers=()
+docker_hosts=""
 env_vars=""
 
 # Function to display usage message
@@ -22,8 +23,10 @@ while getopts ":c:w:e:h" opt; do
   case ${opt} in
     c | --controller)
       controller=$OPTARG
+      docker_hosts+="$OPTARG,"
       ;;
     w | --workers)
+      docker_hosts+="$OPTARG,"
       IFS=',' read -ra worker_pattern <<< "$OPTARG"
       for pattern in "${worker_pattern[@]}"; do
         workers+=("$pattern")
@@ -73,14 +76,7 @@ controller_info=($(parse_ssh_connection "$controller"))
 # Setup passwordlesss for whole cluster
 cluster+=("$controller")
 cluster+=("${workers[@]}")
-./setup-passwordless.sh "${cluster[@]}"
-
-# Check if Ansible is installed
-ansible --version >/dev/null 2>&1
-if [[ $? -ne 0 ]]; then
-    echo "Ansible is not installed. Please install Ansible before running this script."
-    exit 1
-fi
+./setup-docker.sh -m "${docker_hosts%,}" "${env_vars}"
 
 # Generate controller block and reference block
 controller_block="$(
@@ -120,7 +116,7 @@ EOF
     index=$(( index + 1 ))
     done
 )"
-inventory_file=${inventory_file:-/tmp/inventory.yaml}
+inventory_file=${inventory_file:-/tmp/inventory-k8s.yaml}
 cat <<EOF | tee $inventory_file
 all:
   children:

@@ -1,6 +1,3 @@
-k8s_pod_subnet: "10.244.0.0/16"
-k8s_service_subnet: "10.96.0.0/12"
-
 # If use proxy
 use_proxy: false
 
@@ -10,5 +7,5 @@ proxy_profile: "/etc/environment"
 # If use mirror
 use_mirror: false
 
-# Aliyun or AzureChinaCloud is supported
+# Aliyun or AzureChinaCloud is acceptable
 mirror: "Aliyun"

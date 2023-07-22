@@ -17,14 +17,14 @@
       tasks_from: stop_service
     vars:
       service_name: "docker"
-    when: docker_installed_rs.rc == 0
+    when: docker_version_rs is success
 
   - name: Uninstall Docker
     package:
       name: "{{ item }}"
       state: absent
     loop: "{{ docker_packages }}"
-    when: docker_installed_rs.rc == 0
+    when: docker_version_rs is success
 
   - name: Uninstall Docker conflict packages
     package:
