@@ -3,8 +3,8 @@
 ```shell
 Usage: ./setup-k8s.sh -c <user@ip[:port]> [-w <user@ip[:port],...>] [-e <key=value> ...]
 Options:
-  -c, --controller <user@ip[:port]>   Specify the SSH connection pattern for the controller (required)
-  -w, --workers <user@ip[:port],...>  Specify the SSH connection patterns for the workers (optional, comma-separated)
+  -c, --controller <user@ip[:port]>       Specify the SSH connection pattern for the controller (required)
+  -w, --workers <user@ip[:port],...>      Specify the SSH connection patterns for the workers (optional, comma-separated)
   -e, --extra-vars <key=value>            Specify additional environment variables (optional, multiple can be provided)
   -h, --help                              Display this help message
 ```
@@ -41,4 +41,13 @@ e.g.: Cluster = 1 controller + 2 workers
 
 # Execute below command to get admin user access token for login
 kubectl get secret ${ADMIN_USERNAME:-admin} -n kubernetes-dashboard -o jsonpath={".data.token"} | base64 -d
+```
+
+### If you prefer to only install docker, it is supported as follows:
+```shell
+Usage: ./setup-docker.sh -m <user@ip[:port]>[<user@ip[:port],...>] [-e <key=value> ...]
+Options:
+  -m, --machine <user@ip[:port],...>      Specify the SSH connection patterns for the machine(s) (required at least one, multiple can be provided with comma-separated)
+  -e, --extra-vars <key=value>            Specify additional environment variables (optional, multiple can be provided)
+  -h, --help                              Display this help message
 ```
