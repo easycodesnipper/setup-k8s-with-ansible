@@ -1,7 +1,7 @@
 
 - name: Check if node already joined with Ready status
   shell: |
-    kubectl get node {{ hostname }} | awk 'NR>1{print $2}'
+    kubectl get node k8s-worker2 > /dev/null 2>&1
   args:
     executable: /bin/bash
   register: check_ready_node_rs

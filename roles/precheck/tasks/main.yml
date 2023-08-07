@@ -1,21 +1,21 @@
-- name: Check if mirror is set if use mirror
+- name: Print all host variables
+  debug:
+    var: hostvars[inventory_hostname]
+
+- name: Check if at least one proxy is set when using proxy
   fail:
-    msg: "mirror is required since use_mirror is true"
+    msg: "use proxy, but no http_proxy,https_proxy or socks_proxy is defined."
   when: 
-    - use_mirror
-    - mirror is not defined
+    - use_proxy
+    - http_proxy is not defined
+    - https_proxy is not defined
+    - socks_proxy is not defined
   changed_when: false
 
-- name: Gather facts only for package_facts
-  setup:
-    gather_subset: ['!all', '!facter']  # Exclude all subsets except 'facter'
-
-- name: Read os family from /etc/os-release
-  shell: |
-    . /etc/os-release; echo $ID_LIKE
-  args:
-    executable: /bin/bash
-  register: os_family_rs
+- name: Check if mirror is set when using mirror
+  fail:
+    msg: "use mirror but mirror is not defined"
+  when: use_mirror and mirror is not defined
   changed_when: false
 
 - name: Get hostname
@@ -26,36 +26,30 @@
   register: hostname_rs
   changed_when: false
 
-- name: Set facts
-  set_fact:
-    os_family: "{{ os_family_rs.stdout }}"
-    hostname: "{{ hostname_rs.stdout }}"
-
 - name: Check if hostname matches RFC 1178
   fail:
     msg: "The hostname {{ hostname_rs }} does not match RFC 1178."
-  when: hostname is not match(rfc1178_regex)
+  when: hostname_rs.stdout is not match(rfc1178_regex)
 
-- block:
-  - name: Cleanup Docker repo if use mirror
-    file:
-      path: "{{ '/etc/apt/sources.list.d/docker.list' if (os_family == 'debian') else '/etc/yum.repos.d/docker-ce.repo' }}"
-      state: absent
-    ignore_errors: yes
+- name: Read os family from /etc/os-release
+  shell: |
+    . /etc/os-release; echo $ID_LIKE
+  args:
+    executable: /bin/bash
+  register: os_family_rs
+  changed_when: false
 
-  - name: Cleanup Kubernetes repo if use mirror
-    file:
-      path: "{{ '/etc/apt/sources.list.d/kubernetes.list' if (os_family == 'debian') else '/etc/yum.repos.d/kubernetes.repo' }}"
-      state: absent
-    ignore_errors: yes
-  when: use_mirror and mirror is defined
+- name: Set facts
+  set_fact:
+    use_proxy: "{{ (http_proxy is defined and (http_proxy | length > 0)) or (https_proxy is defined and (https_proxy | length > 0)) or (socks_proxy is defined and (socks_proxy | length > 0)) }}"
+    use_mirror: "{{ (mirror is defined and (mirror | length > 0)) }}"
+    os_family: "{{ os_family_rs.stdout }}"
+    hostname: "{{ hostname_rs.stdout }}"
 
-- name: Update package cache
-  command: "{{ 'apt update -y' if ansible_facts.pkg_mgr == 'apt' else 'yum updateinfo -y' }}"
-  register: apt_update_rs
-  until: apt_update_rs is success
-  retries: 3
-  delay: 15
+- include_role:
+    name: proxy
+  vars:
+    no_proxy: "127.0.0.1,localhost,{{ groups['cluster_hosts'] | map('extract', hostvars, 'ansible_host') | join(',') }}"
 
 - block:
   - name: Check SELinux status
@@ -63,7 +57,7 @@
     register: selinux_rs
 
   - block:
-    - name: Update SELinux configuration file
+    - name: Disable SELinux
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
@@ -84,3 +78,10 @@
       delegate_to: localhost
     when: selinux_rs.stdout == 'Enforcing'
   when: os_family  == "rhel fedora"
+
+- name: Cleanup Kubernetes repo
+  file:
+    path: "{{ '/etc/apt/sources.list.d/kubernetes.list' if (os_family == 'debian') else '/etc/yum.repos.d/kubernetes.repo' }}"
+    state: absent
+  ignore_errors: yes
+  when: use_mirror

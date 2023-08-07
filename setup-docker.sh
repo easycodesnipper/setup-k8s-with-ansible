@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-#!/bin/bash
-
 # Default values
 machines=()
 env_vars=""
@@ -94,8 +92,8 @@ all:
       hosts:
 $cluster_hosts_block
 EOF
+
 # Ansible playbook with generated inventory file
-# set -x
 ANSIBLE_ROLES_PATH=./roles \
 ANSIBLE_INVENTORY_ENABLED=yaml \
 ansible-playbook -vv \

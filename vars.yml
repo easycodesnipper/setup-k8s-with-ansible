@@ -1,11 +1,11 @@
 # If use proxy
 use_proxy: false
 
-# Proxy profile 
+# Proxy profile
 proxy_profile: "/etc/environment"
 
 # If use mirror
 use_mirror: false
 
 # Aliyun or AzureChinaCloud is acceptable
-mirror: "Aliyun"
+mirror: ""

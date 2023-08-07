@@ -40,7 +40,7 @@
     regexp: '^(\s*)sandbox_image\s*=\s*".*"'
     line: '\g<1>sandbox_image = "{{ containerd_sandbox_image[mirror] }}"'
     backrefs: yes
-  when: use_mirror and mirror is defined
+  when: use_mirror
 
 - include_role:
     name: common

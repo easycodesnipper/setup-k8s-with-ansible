@@ -21,9 +21,8 @@
 
   - name: Uninstall Docker
     package:
-      name: "{{ item }}"
+      name: "{{ docker_packages }}"
       state: absent
-    loop: "{{ docker_packages }}"
     when: docker_version_rs is success
 
   - name: Uninstall Docker conflict packages
@@ -47,7 +46,7 @@
   - name: Install docker with downloaded install script
     shell: |
       /tmp/install-docker.sh \
-      {% if use_mirror and mirror is defined %}
+      {% if use_mirror %}
         --mirror "{{ mirror }}" \
       {% endif %}
       --version "{{ docker_version }}"
@@ -97,6 +96,7 @@
       "data-root": "{{ docker_data_root }}"
       "registry-mirrors": "{{ docker_registry_mirrors }}"
       "exec-opts": ["native.cgroupdriver=systemd"]
+      "bip": "{{ docker_bip }}"
 
 - name: Read existing file content of {{ docker_daemon_json }}
   slurp:

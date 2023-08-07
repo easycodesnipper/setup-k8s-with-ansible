@@ -15,6 +15,7 @@ docker_config_paths:
 docker_version: "24.0.4"
 
 docker_daemon_json: "/etc/docker/daemon.json"
+docker_bip: "172.17.0.1/16"
 docker_data_root: "/var/lib/docker"
 docker_registry_mirrors: []
 

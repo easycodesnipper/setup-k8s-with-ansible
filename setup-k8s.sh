@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-#!/bin/bash
-
 # Default values
 controller=""
 workers=()
@@ -76,7 +74,9 @@ controller_info=($(parse_ssh_connection "$controller"))
 # Setup passwordlesss for whole cluster
 cluster+=("$controller")
 cluster+=("${workers[@]}")
-./setup-docker.sh -m "${docker_hosts%,}" "${env_vars}"
+
+# Setup docker
+./setup-docker.sh -m ${docker_hosts%,} ${env_vars}
 
 # Generate controller block and reference block
 controller_block="$(
@@ -131,8 +131,8 @@ $controller_ref_block
       hosts:
 $worker_ref_block
 EOF
+
 # Ansible playbook with generated inventory file
-# set -x
 ANSIBLE_ROLES_PATH=./roles \
 ANSIBLE_INVENTORY_ENABLED=yaml \
 ansible-playbook -vv \

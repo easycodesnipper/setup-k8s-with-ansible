@@ -7,13 +7,8 @@
     - vars-k8s.yml
   tasks:
     - include_role:
-        name: proxy
-      vars:
-        no_proxy: "127.0.0.1,localhost,{{ groups['cluster_hosts'] | map('extract', hostvars, 'ansible_host') | join(',') }},{{ k8s_pod_subnet }},{{ k8s_service_subnet }}"
-
-    - include_role:
         name: precheck
-
+  
     - include_role:
         name: k8s
 

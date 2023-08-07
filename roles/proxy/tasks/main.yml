@@ -1,18 +1,3 @@
-- name: Set facts for proxy
-  set_fact:
-    use_proxy: "{{ (use_proxy | default(false) ) or (http_proxy is defined) or (https_proxy is defined) or (socks_proxy is defined) }}"
-    use_mirror: "{{ (use_mirror | default(false) ) or mirror is defined }}"
-
-- name: Check if at least one proxy is set when using proxy
-  fail:
-    msg: "http_proxy,https_proxy or socks_proxy at least one is required."
-  when: 
-    - use_proxy
-    - http_proxy is not defined
-    - https_proxy is not defined
-    - socks_proxy is not defined
-  changed_when: false
-
 - name: Set proxy in profile {{ proxy_profile }}
   blockinfile:
     path: "{{ proxy_profile }}"
